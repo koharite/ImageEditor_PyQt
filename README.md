@@ -7,3 +7,6 @@ For Anaconda user, to install run the command below.
 ```bash
 conda install -c conda-forge pyside2
 ```
+
+# Screen shot
+![](./readme_img/AppkicationScreenShot.png)
