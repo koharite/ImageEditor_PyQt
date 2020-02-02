@@ -9,4 +9,4 @@ conda install -c conda-forge pyside2
 ```
 
 # Screen shot
-![](./readme_img/AppkicationScreenShot.png)
+![](./readme_img/ApplicationScreenShot.png)
