@@ -1,0 +1,18 @@
+{
+    "SoftwareSetting":
+    {
+        "file_path":{
+            "org_img_dir":"./sample/org_img",
+            "layer_img_dir":"./sample/layer"
+        },
+
+        "process":{
+            "colormap":{
+                "gain":10,
+                "offset_x":0.2,
+                "offset_green":0.6
+            }
+        }
+    }
+    
+}
