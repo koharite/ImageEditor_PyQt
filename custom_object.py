@@ -1,5 +1,5 @@
 """
-Start creating on Wed. Jan.3, 2020
+Start creating on Fri. Jan.3, 2020
 author: koharite
 
 Customized Object for Qt for Python (PySide2)
@@ -7,12 +7,12 @@ Customized Object for Qt for Python (PySide2)
 """
 
 # import libraries
-
+from PySide2.QtCore import (Qt, Signal, QLineF)
 from PySide2.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsItem)
-from PySide2.QtGui import QColor
+from PySide2.QtGui import (QColor, QPen)
 
 
-class GraphicsSceneForMouseAction(QGraphicsScene):
+class GraphicsSceneForMainView(QGraphicsScene):
 
     def __init__(self, parent=None, window=None, mode='cursor'):
         QGraphicsScene.__init__(self, parent)
@@ -22,6 +22,12 @@ class GraphicsSceneForMouseAction(QGraphicsScene):
         self.window = window
         # Set action mode
         self.mode = mode
+
+        # mouse move pixels
+        self.points = []
+
+        # added line items
+        self.lines = []
         
     def set_mode(self, mode):
         self.mode = mode
@@ -38,45 +44,89 @@ class GraphicsSceneForMouseAction(QGraphicsScene):
 
         if self.mode == 'cursor':
             # Get items on cursor
-            #items = self.itemAt(pos, QTransform)
-            #items = self.itemAt(pos, self.parent.viewportTransform())
-            #img_val = [[0 for j in range(4)] for i in range(len(items))]
-            #img_val = []
-            #print('items:{items}'.format(items=items))
             message = '(x, y)=({x}, {y}) '.format(x=int(x), y=int(y))
-            #for i, item in enumerate(items):
-            #for item in items:
+
             for img in self.img_contents:
-                #item_pixmap = items.pixmap()
                 # Get pixel value
-                #pix_val = item_pixmap.pixel(pos.x(), pos.y())
                 pix_val = img.pixel(x, y)
                 pix_rgb = QColor(pix_val).getRgb()
-                #img_val.append(pix_rgb)
-                #print('pix_rgb size={size}'.format(size=len(pix_rgb)))
                 message += '(R, G, B) = {RGB} '.format(RGB=pix_rgb[:3])
-
 
             # show scene status on parent's widgets status bar
             self.window.statusBar().showMessage(message)
 
+        if self.mode == 'pen' or self.mode == 'eraser':
+            if x >= 0 and x < self.width() and y >= 0 and y < self.height():
+                if len(self.points) != 0:
+                    draw_color = self.window.draw_color
+                    # Set transparenc value
+                    draw_color.setAlpha(self.window.layer_alpha)
+                    draw_size = self.window.draw_tool_size
+                    pen = QPen(draw_color, draw_size, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                    self.addLine(QLineF(self.points[-1].x(), self.points[-1].y(), x, y), pen=pen)
 
-class GraphicsViewForMouseAction(QGraphicsView):
+                self.points.append(pos)
 
-    def __init__(self, parent=None, mode='cursor'):
-        QGraphicsView.__init__(self, parent)
-        # Set parent widget(window)
-        self.parent = parent
-        # Set action mode
-        self.mode = mode
-    
-    def set_mode(self, mode):
-        self.mode = mode
-
-    def mousePressEvent(self, event):
+    def mouseMoveEvent(self, event):
         pos = event.scenePos()
         x = pos.x()
         y = pos.y()
 
         if self.mode == 'cursor':
-            item = self.itemAt(x, y)
+            # Get items on cursor
+            message = '(x, y)=({x}, {y}) '.format(x=int(x), y=int(y))
+            for img in self.img_contents:
+                # Get pixel value
+                pix_val = img.pixel(x, y)
+                pix_rgb = QColor(pix_val).getRgb()
+                message += '(R, G, B) = {RGB} '.format(RGB=pix_rgb[:3])
+
+            # show scene status on parent's widgets status bar
+            self.window.statusBar().showMessage(message)
+
+        if self.mode == 'pen' or self.mode == 'eraser':
+            if x >= 0 and x < self.width() and y >= 0 and y < self.height():
+                if len(self.points) != 0:
+                    draw_color = self.window.draw_color
+                    # Set transparenc value
+                    draw_color.setAlpha(self.window.layer_alpha)
+                    draw_size = self.window.draw_tool_size
+                    pen = QPen(draw_color, draw_size, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                    self.addLine(QLineF(self.points[-1].x(), self.points[-1].y(), x, y), pen=pen)
+
+                self.points.append(pos)
+
+    def mouseReleaseEvent(self, event):
+        self.points = []
+
+
+# Class for graphics contents of tools on main window
+class GraphicsSceneForTools(QGraphicsScene):
+    # Define custom signal
+    img_info = Signal(QColor)
+
+    def __init__(self, parent=None, window=None):
+        QGraphicsScene.__init__(self, parent)
+        # Set parent view area
+        self.parent = parent
+        # Set grand parent window
+        self.window = window
+
+        self.mode = 'cursor'
+
+    def set_mode(self, mode):
+        self.mode = mode
+
+    def set_img_content(self, img_content):
+        # image data of Graphics Scene's contents
+        self.img_content = img_content
+    
+    def mousePressEvent(self, event):
+        # For check program action
+        pos = event.scenePos()
+        x = pos.x()
+        y = pos.y()
+
+        if self.mode == 'cursor' or self.mode == 'pen':
+            self.pix_rgb = self.img_content.pixelColor(x, y)
+            self.img_info.emit(self.pix_rgb)

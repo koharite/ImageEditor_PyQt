@@ -1,20 +1,20 @@
 """
-Start creating on Tue. Jan. 2, 2020
+Start creating on Thu. Jan. 2, 2020
 author: koharite
 
-Image Editor Software using Qt for Python (PySide2)
+Image Editor Application using Qt for Python (PySide2)
 
-Software has viewer function of image and editor funciton of layer image.
+Application has viewer function of image and editor funciton of layer image.
 
 """
 
 # import libraries
 from PySide2.QtCore import (QRect, QLineF, QPoint, QPointF, QRectF, Qt, QSize)
 from PySide2.QtWidgets import (QMainWindow, QApplication, QWidget, QMessageBox, QFileDialog, \
-    QHBoxLayout, QVBoxLayout, QFormLayout, QSizePolicy, QStyle, \
-    QLabel, QLineEdit, QPushButton, QComboBox, QSlider, QAction, QActionGroup, QButtonGroup, \
+    QHBoxLayout, QVBoxLayout, QFormLayout, QStyle, \
+    QLabel, QLineEdit, QPushButton, QSlider, QButtonGroup, QAction, \
     QGraphicsScene, QGraphicsView, QGraphicsPixmapItem)
-from PySide2.QtGui import(QIcon, QImage, QPixmap, QPainter, QColor, QPen)
+from PySide2.QtGui import(QIcon, QImage, QPixmap, QPainter, QColor, QPen, QBrush)
 
 import sys
 import os
@@ -23,7 +23,7 @@ import pprint
 import numpy as np
 
 import colormap
-from custom_object import GraphicsSceneForMouseAction
+from custom_object import (GraphicsSceneForMainView, GraphicsSceneForTools)
 
 # Main Window components
 class MainWindow(QMainWindow):
@@ -62,6 +62,10 @@ class MainWindow(QMainWindow):
 
         self.img_edit_mode = 'cursor'
 
+        self.draw_color = QColor(255, 0, 0)
+        self.draw_tool_size = 5
+        self.eraser_color = QColor(0, 0, 0, 0)
+
         # setup user interface components
         self.setup_ui()
         
@@ -81,7 +85,6 @@ class MainWindow(QMainWindow):
         self.main_menu = self.menuBar()
         self.file_menu = self.main_menu.addMenu('File')
         self.edit_menu = self.main_menu.addMenu('Edit')
-        self.option_menu = self.main_menu.addMenu('Option')
         self.help_menu = self.main_menu.addMenu('Help')
 
         self.main_layout.addWidget(self.main_menu)
@@ -105,12 +108,16 @@ class MainWindow(QMainWindow):
         self.main_layout.addLayout(self.upper_layout)
 
         # Set image display area
-        self.gview_left = 20
-        self.gview_top = 40
         self.gview_default_size = 500
         self.graphics_view = QGraphicsView()
         self.graphics_view.setFixedSize(self.gview_default_size, self.gview_default_size)
+        self.graphics_view.setObjectName("imageDisplayArea")
         self.upper_layout.addWidget(self.graphics_view)
+
+        # image display area's contents
+        self.scene = GraphicsSceneForMainView(self.graphics_view, self)
+        self.imgs_pixmap = []
+        self.imgs = []
 
         self.img_status_layout = QVBoxLayout()
         self.upper_layout.addLayout(self.img_status_layout)
@@ -138,7 +145,7 @@ class MainWindow(QMainWindow):
         self.img_editor_layout = QVBoxLayout()
         self.img_status_layout.addLayout(self.img_editor_layout)
         
-        # Set attention map editor tool
+        # Set layer image editor tool
         self.img_editor_tool1_layout = QHBoxLayout()
         self.img_editor_layout.addLayout(self.img_editor_tool1_layout)
         self.tool_button_size = 64
@@ -175,13 +182,12 @@ class MainWindow(QMainWindow):
         self.pen_button.toggled.connect(self.pen_button_toggled)
         self.eraser_button.toggled.connect(self.eraser_button_toggled)
 
-
         # Set color bar
         self.color_bar_width = 64
         self.color_bar_height = 256
         self.color_bar_view = QGraphicsView()
         self.color_bar_view.setFixedSize(self.color_bar_width+3, self.color_bar_height+3)
-        self.color_bar_scene = QGraphicsScene()
+        self.color_bar_scene = GraphicsSceneForTools()
 
         for i in range(self.color_bar_height):
             # Set drawing pen for colormap 
@@ -190,14 +196,67 @@ class MainWindow(QMainWindow):
                 Qt.RoundCap, Qt.RoundJoin)
             self.color_bar_scene.addLine(0, self.color_bar_height - i-1, self.color_bar_width, self.color_bar_height - i-1, pen)
 
+        self.color_bar_img = QImage(self.color_bar_width, self.color_bar_height, QImage.Format_RGB888)
+
+        for i in range(self.color_bar_height):
+            # Set drawing pen for colormap
+            ii = round(i * (1000/256))
+            color = QColor(self.colormap_data[ii][0], self.colormap_data[ii][1], self.colormap_data[ii][2])
+            pen = QPen(color, 1, Qt.SolidLine, \
+                Qt.SquareCap, Qt.RoundJoin)
+            self.color_bar_scene.addLine(0, self.color_bar_height - i-1, self.color_bar_width, self.color_bar_height - i-1, pen=pen)
+            for j in range(self.color_bar_width):
+                self.color_bar_img.setPixelColor(j, self.color_bar_height-i-1, color)
+
+        self.color_bar_scene.set_img_content(self.color_bar_img)
+
         self.color_bar_view.setScene(self.color_bar_scene)
+
+        # Connect signal to slot of color_bar_scene
+        self.color_bar_scene.img_info.connect(self.set_selected_color)
 
         self.img_editor_tool1_layout.addWidget(self.color_bar_view)
 
 
         # Set thickness of Pen or Eraser
+        self.draw_status_layout = QVBoxLayout()
+        self.draw_thick_title_label = QLabel('thickness of pen or eraser')
+        self.draw_status_layout.addWidget(self.draw_thick_title_label)
 
-        self.graphics_view.setObjectName("imageDisplayArea")
+        self.draw_thick_edit = QLineEdit(str(self.draw_tool_size))
+
+        self.draw_thick_sld = QSlider(Qt.Horizontal)
+        self.draw_thick_sld.setFocusPolicy(Qt.NoFocus)
+        self.draw_thick_sld.setRange(1, 30)
+        self.draw_thick_sld.setValue(self.draw_tool_size)
+
+        self.draw_thick_layout = QFormLayout()
+        self.draw_thick_layout.addRow(self.draw_thick_sld, self.draw_thick_edit)
+        self.draw_status_layout.addLayout(self.draw_thick_layout)
+
+        self.img_status_layout.addLayout(self.draw_status_layout)
+
+        # Signal of draw thickness value changed
+        self.draw_thick_sld.valueChanged.connect(self.draw_thick_change_sld)
+        self.draw_thick_edit.textChanged.connect(self.draw_thick_change_edit)
+
+        # Set view area of selected color
+        self.select_color_view_size = 64
+        self.select_color_view = QGraphicsView()
+        self.select_color_view.setFixedSize(self.select_color_view_size+3, self.select_color_view_size+3)
+        self.select_color_scene = QGraphicsScene()
+        brush = QBrush(self.draw_color)
+
+        self.select_color_rect = self.select_color_scene.addRect(QRect(0, 0, self.select_color_view_size, self.select_color_view_size), \
+            brush=brush)
+        
+        self.select_color_view.setScene(self.select_color_scene)
+
+        self.select_color_title_label = QLabel('Selected color')
+        self.selected_color_layout = QFormLayout()
+        self.selected_color_layout.addRow(self.select_color_title_label, self.select_color_view)
+        self.img_editor_layout.addLayout(self.selected_color_layout)
+
 
         # Set display area of selected file path
         self.org_img_path_title_label = QLabel('original image file: ')
@@ -212,12 +271,6 @@ class MainWindow(QMainWindow):
 
         self.mainWidget.setLayout(self.main_layout)
         self.setCentralWidget(self.mainWidget)
-
-
-        # image display area's contents
-        self.scene = GraphicsSceneForMouseAction(self.graphics_view, self)
-        self.imgs_pixmap = []
-        self.imgs = []
         
 
     # Original image select Function
@@ -283,17 +336,17 @@ class MainWindow(QMainWindow):
                 
         self.layer_pixmap = QPixmap.fromImage(self.layer_qimg)
 
-        # remove previous attention map image
+        # remove previous layer image
         self.scene.removeItem(self.imgs_pixmap[-1])
         self.imgs_pixmap.pop(-1)
 
-        # add new attention map image to scene
+        # add new layer image to scene
         self.imgs_pixmap.append(QGraphicsPixmapItem(self.layer_pixmap))
         self.scene.addItem(self.imgs_pixmap[-1])
 
         self.show()
 
-        # Slot function of transparency text edit changed
+    # Slot function of transparency text edit changed
     def transparency_change_edit(self, value):
         if int(value) < 0 or int(value) > 100:
             return
@@ -308,11 +361,11 @@ class MainWindow(QMainWindow):
                 
         self.layer_pixmap = QPixmap.fromImage(self.layer_qimg)
 
-        # remove previous attention map image
+        # remove previous layer image
         self.scene.removeItem(self.imgs_pixmap[-1])
         self.imgs_pixmap.pop(-1)
 
-        # add new attention map image to scene
+        # add new layer image to scene
         self.imgs_pixmap.append(QGraphicsPixmapItem(self.layer_pixmap))
         self.scene.addItem(self.imgs_pixmap[-1])
 
@@ -323,18 +376,49 @@ class MainWindow(QMainWindow):
         if checked:
             self.img_edit_mode = 'cursor'
             self.scene.set_mode(self.img_edit_mode)
+            self.color_bar_scene.set_mode(self.img_edit_mode)
 
     # slot(receiver of signal) of pen_button toggled 
     def pen_button_toggled(self, checked):
         if checked:
             self.img_edit_mode = 'pen'
             self.scene.set_mode(self.img_edit_mode)
+            self.color_bar_scene.set_mode(self.img_edit_mode)
 
     # slot(receiver of signal) of eraser_button toggled 
     def eraser_button_toggled(self, checked):
         if checked:
             self.img_edit_mode = 'eraser'
             self.scene.set_mode(self.img_edit_mode)
+            self.color_bar_scene.set_mode(self.img_edit_mode)
+            self.draw_color = self.eraser_color
+
+            self.select_color_scene.removeItem(self.select_color_rect)
+            brush = QBrush(self.draw_color)
+            self.select_color_rect = self.select_color_scene.addRect(QRect(0, 0, self.select_color_view_size, self.select_color_view_size), \
+                brush=brush)
+            self.select_color_view.setScene(self.select_color_scene)
+
+    # Slot of color bar clicked for selection color
+    def set_selected_color(self, color):
+        # Delete existng image item
+        self.select_color_scene.removeItem(self.select_color_rect)
+        self.draw_color = color
+        brush = QBrush(self.draw_color)
+        self.select_color_rect = self.select_color_scene.addRect(QRect(0, 0, self.select_color_view_size, self.select_color_view_size), \
+            brush=brush)
+        self.select_color_view.setScene(self.select_color_scene)
+
+    # Slot function of draw thicikeness slider changed
+    def draw_thick_change_sld(self, value):
+        self.draw_thickness_edit.setText(str(value))
+        self.draw_tool_size = value
+    
+    # Slot function of draw thicikeness text editor changed
+    def draw_thick_change_edit(self, value):
+        if int(value) < 1 or int(value) > 30:
+            return
+        self.draw_thickness_sld.setValue(int(value))
         
         
 if __name__ == '__main__':
