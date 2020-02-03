@@ -4,8 +4,15 @@ Application of Image viewer function and drawing funcion in layerd image has tra
 # Required
 This application made by Qt for Python (PySide2).
 For Anaconda user, to install run the command below.
+
 ```bash
 conda install -c conda-forge pyside2
+```
+
+# Start application
+
+```bash
+python main.py
 ```
 
 # Screen shot
