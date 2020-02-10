@@ -234,7 +234,7 @@ class MainWindow(QMainWindow):
         self.draw_thick_layout.addRow(self.draw_thick_sld, self.draw_thick_edit)
         self.draw_status_layout.addLayout(self.draw_thick_layout)
 
-        self.img_status_layout.addLayout(self.draw_status_layout)
+        self.img_editor_layout.addLayout(self.draw_status_layout)
 
         # Signal of draw thickness value changed
         self.draw_thick_sld.valueChanged.connect(self.draw_thick_change_sld)
@@ -256,6 +256,23 @@ class MainWindow(QMainWindow):
         self.selected_color_layout = QFormLayout()
         self.selected_color_layout.addRow(self.select_color_title_label, self.select_color_view)
         self.img_editor_layout.addLayout(self.selected_color_layout)
+
+        # Set save button
+        self.save_button_layout = QHBoxlayout()
+        self.img_status_layout.addLayout(self.save_button_layout)
+        self.layer_save_button = QPushButton('Save layer image')
+        self.layer_save_button.setIcon(QIcon('icon/layer_save.png'))
+        self.layer_save_button.setIconSize(QSize(self.tool_button_size, self.tool_button_size))
+        
+        self.compose_save_button = QPushButton('Save composed original and layer image')
+        self.compose_save_button.setIcon(QIcon('icon/compose_save.png'))
+        self.compose_save_button.setIconSize(QSize(self.tool_button_size, self.tool_button_size))
+
+        self.save_button_layout.addWidget(self.layer_save_button)
+        self.save_button_layout.addWidget(self.compose_save_button)
+
+        self.layer_save_button.clicked.connect(self.save_layer_image)
+        self.compose_save_button.clicked.connect(self.save_compose_image)
 
 
         # Set display area of selected file path
@@ -419,6 +436,13 @@ class MainWindow(QMainWindow):
         if int(value) < 1 or int(value) > 30:
             return
         self.draw_thickness_sld.setValue(int(value))
+
+    # Slot function of save layer image button clicked
+    def save_layer_image(self):
+
+    # Slot function of save composer original and layer image button clicked
+    def save_compose_image(self):
+        
         
         
 if __name__ == '__main__':
