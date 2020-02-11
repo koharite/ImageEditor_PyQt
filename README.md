@@ -1,5 +1,6 @@
 # Image Editor Application
-Application of Image viewer function and drawing funcion in layerd image has tranparency value.
+Application of Image viewer function and drawing and file saving funcion on layer image has tranparency value.  
+
 
 # Required
 This application made by Qt for Python (PySide2).
