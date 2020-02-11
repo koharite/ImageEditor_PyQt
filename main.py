@@ -90,11 +90,22 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(self.main_menu)
 
         # Set "Original Image Open" menu
-        self.org_img_open_button = QAction(self.style().standardIcon(getattr(QStyle, 'SP_FileDialogStart')), 'Orginal Image Open', self)
+        self.org_img_open_button = QAction(self.style().standardIcon(getattr(QStyle, 'SP_FileDialogStart')), 'Open Orginal Image', self)
         self.org_img_open_button.setShortcut('Ctrl+O')
         self.org_img_open_button.triggered.connect(self.open_org_img_dialog)
         self.file_menu.addAction(self.org_img_open_button)
 
+        # Set "Save layer image" menu
+        self.layer_img_save_button = QAction(self.style().standardIcon(getattr(QStyle, 'SP_FileDialogEnd')), 'Save Layer Image', self)
+        self.layer_img_save_button.setShortcut('Ctrl+S')
+        self.layer_img_save_button.triggered.connect(self.save_layer_image)
+        self.file_menu.addAction(self.layer_img_save_button)
+
+        # Set "Save compose image(original + layer image)" menu
+        self.compose_img_save_button = QAction(self.style().standardIcon(getattr(QStyle, 'SP_FileDialogEnd')), 'Save Compose Image', self)
+        self.compose_img_save_button.setShortcut('Ctrl+D')
+        self.compose_img_save_button.triggered.connect(self.save_compose_image)
+        self.file_menu.addAction(self.compose_img_save_button)
         
         # Set "exit software" menu
         self.exit_button = QAction(self.style().standardIcon(getattr(QStyle, 'SP_DialogCloseButton')), 'Exit', self)
@@ -258,7 +269,7 @@ class MainWindow(QMainWindow):
         self.img_editor_layout.addLayout(self.selected_color_layout)
 
         # Set save button
-        self.save_button_layout = QHBoxlayout()
+        self.save_button_layout = QHBoxLayout()
         self.img_status_layout.addLayout(self.save_button_layout)
         self.layer_save_button = QPushButton('Save layer image')
         self.layer_save_button.setIcon(QIcon('icon/layer_save.png'))
@@ -308,8 +319,9 @@ class MainWindow(QMainWindow):
         # Delete existing image item
         if len(self.imgs_pixmap) != 0:
             for item in self.imgs_pixmap:
-                self.scene.removeItem(item)
-                
+                self.scene.removeItem(item)         
+
+        self.scene.clear_contents()
         self.imgs_pixmap.clear()
         self.imgs.clear()
 
@@ -437,13 +449,126 @@ class MainWindow(QMainWindow):
             return
         self.draw_thickness_sld.setValue(int(value))
 
+    def make_layer_image(self):
+        for i, line in enumerate(self.scene.lines):
+            pen = self.scene.pens[i]
+
+            pen_size = int(pen.width())
+            pen_color = pen.color()
+
+            # start pixel of line
+            x1 = int(line.x1())
+            y1 = int(line.y1())
+
+            # end pixel of line
+            x2 = int(line.x2())
+            y2 = int(line.y2())
+
+            dx = int(line.dx())
+            dy = int(line.dy())
+
+            # When only 1pixl line
+            if dx <= 1 and dy <= 1:
+                draw_pix_x1_s = max(x1 - int(pen_size/2), 0)
+                draw_pix_x1_e = min(x1 + int(pen_size/2), self.org_img_width-1)
+                draw_pix_y1_s = max(y1 - int(pen_size/2), 0)
+                draw_pix_y1_e = min(y1 + int(pen_size/2), self.org_img_height-1)
+
+                # for Pen's size
+                for y in range(draw_pix_y1_s, draw_pix_y1_e):
+                    for x in range(draw_pix_x1_s, draw_pix_x1_e):
+                        self.layer_qimg.setPixelColor(x, y, pen_color)
+
+                draw_pix_x2_s = max(x2 - int(pen_size/2), 0)
+                draw_pix_x2_e = min(x2 + int(pen_size/2), self.org_img_width-1)
+                draw_pix_y2_s = max(y2 - int(pen_size/2), 0)
+                draw_pix_y2_e = min(y2 + int(pen_size/2), self.org_img_height-1)
+
+                # for Pen's size
+                for y in range(draw_pix_y2_s, draw_pix_y2_e):
+                    for x in range(draw_pix_x2_s, draw_pix_x2_e):
+                        self.layer_qimg.setPixelColor(x, y, pen_color)
+
+            else:
+                # For avoid devide by 0
+                if dx == 0:
+                    for y in range(y1, y2+1):
+                        draw_pix_y_s = y - int(pen_size/2)
+                        draw_pix_y_e = y + int(pen_size/2)
+                        # for Pen's size
+                        for yy in range(draw_pix_y_s, draw_pix_y_e):
+                            self.layer_qimg.setPixelColor(x1, yy, pen_color)
+
+                else:
+                    grad = dy/dx
+
+                    # Choose coordinates with small slope not to skip pixels
+                    if grad >= 1.0:
+                        for x in range(dx):
+                            y = y1 + int(grad * x + 0.5)
+                            draw_pix_x_s = max(x1 + x - int(pen_size/2), 0)
+                            draw_pix_x_e = min(x1 + x + int(pen_size/2), self.org_img_width-1)
+                            draw_pix_y_s = max(y - int(pen_size/2), 0)
+                            draw_pix_y_e = min(y + int(pen_size/2), self.org_img_height-1)
+                            # for Pen's size
+                            for yy in range(draw_pix_y_s, draw_pix_y_e+1):
+                                for xx in range(draw_pix_x_s, draw_pix_x_e+1):
+                                    self.layer_qimg.setPixelColor(xx, yy, pen_color)
+
+                    else:
+                        for y in range(dy):
+                            x = x1 + int(1/grad * y + 0.5)
+                            draw_pix_y_s = max(y1 + y - int(pen_size/2), 0)
+                            draw_pix_y_e = min(y1 + y + int(pen_size/2), self.org_img_height-1)
+                            draw_pix_x_s = max(x - int(pen_size/2), 0)
+                            draw_pix_x_e = min(x + int(pen_size/2), self.org_img_width-1)
+                            # for Pen's size
+                            for yy in range(draw_pix_y_s, draw_pix_y_e+1):
+                                for xx in range(draw_pix_x_s, draw_pix_x_e+1):
+                                    self.layer_qimg.setPixelColor(xx, yy, pen_color)
+
+
     # Slot function of save layer image button clicked
     def save_layer_image(self):
 
+        self.make_layer_image()
+
+        layer_img_default_path = self.app_setting["SoftwareSetting"]["file_path"]["layer_img_dir"]
+        options = QFileDialog.Options()
+        file_name, selected_filete = QFileDialog.getSaveFileName(self, 'Save layer image', layer_img_default_path, \
+            'image files(*.png, *jpg)', options=options)
+        
+        #print('layer image save name:{file}'.format(file=file_name))
+        self.layer_qimg.save(file_name)
+        ret = QMessageBox(self, 'Success', 'layer image is saved successfully', QMessageBox.Ok)
+
+    # Make composed orignal and layered image
+    def make_compose_image(self):
+        self.make_layer_image()
+
+        self.compose_qimg = QImage(self.org_img_width, self.org_img_height, QImage.Format_RGBA8888)
+        painter = QPainter(self.compose_qimg)
+
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        painter.drawImage(0, 0, self.org_qimg)
+
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        painter.drawImage(0, 0, self.layer_qimg)
+
+        painter.end()
+
     # Slot function of save composer original and layer image button clicked
     def save_compose_image(self):
+        self.make_compose_image()
+
+        compose_img_default_path = self.app_setting["SoftwareSetting"]["file_path"]["compose_img_dir"]
+        options = QFileDialog.Options()
+        file_name, selected_fileter = QFileDialog.getSaveFileName(self, 'Save composed image', compose_img_default_path, \
+            'image files(*.png, *jpg)', options=options)
         
-        
+        #print('compose image save name:{file}'.format(file=file_name))
+        self.compose_qimg.save(file_name)
+        ret = QMessageBox(self, 'Success', 'compose image is saved successfully', QMessageBox.Ok)
         
 if __name__ == '__main__':
     app = QApplication(sys.argv)

@@ -3,7 +3,8 @@
     {
         "file_path":{
             "org_img_dir":"./sample/org_img",
-            "layer_img_dir":"./sample/layer"
+            "layer_img_dir":"./sample/layer_img",
+            "compose_img_dir":"./sample/compose_img"
         },
 
         "process":{
