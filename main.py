@@ -200,13 +200,6 @@ class MainWindow(QMainWindow):
         self.color_bar_view.setFixedSize(self.color_bar_width+3, self.color_bar_height+3)
         self.color_bar_scene = GraphicsSceneForTools()
 
-        for i in range(self.color_bar_height):
-            # Set drawing pen for colormap 
-            ii = round(i * (1000/256))
-            pen = QPen(QColor(self.colormap_data[ii][0], self.colormap_data[ii][1], self.colormap_data[ii][2]), 1, Qt.SolidLine, \
-                Qt.RoundCap, Qt.RoundJoin)
-            self.color_bar_scene.addLine(0, self.color_bar_height - i-1, self.color_bar_width, self.color_bar_height - i-1, pen)
-
         self.color_bar_img = QImage(self.color_bar_width, self.color_bar_height, QImage.Format_RGB888)
 
         for i in range(self.color_bar_height):
